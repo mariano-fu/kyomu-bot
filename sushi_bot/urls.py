@@ -16,8 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from chat.oauth_views import InstagramOAuthView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/webhook/", include("chat.webhook_urls")),
+    path('api/instagram/oauth/',   InstagramOAuthView.as_view()),
 ]

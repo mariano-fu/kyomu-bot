@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from .models import Customer, ChatMessage
 from .utils import send_whatsapp, send_instagram
 
+# Keep your verify token secret via environment variable
 VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN")
 
 class MetaWebhook(APIView):
@@ -18,6 +19,7 @@ class MetaWebhook(APIView):
         token     = request.GET.get("hub.verify_token")
         challenge = request.GET.get("hub.challenge")
 
+        # Verification handshake
         if mode == "subscribe" and token == VERIFY_TOKEN:
             return HttpResponse(challenge, content_type="text/plain")
         return HttpResponseForbidden("Invalid verification token")
@@ -25,35 +27,69 @@ class MetaWebhook(APIView):
     def post(self, request, *args, **kwargs):
         payload = request.data
 
-        # WhatsApp messages
+        # 1) Instagram test payload using 'field'/'value' format
+        if payload.get("field") == "messages":
+            val = payload.get("value", {})
+            sender_id = val.get("sender", {}).get("id")
+            text = val.get("message", {}).get("text", "")
+
+            customer, _ = Customer.objects.get_or_create(
+                platform="instagram", user_id=sender_id
+            )
+            # Persist inbound message
+            ChatMessage.objects.create(
+                customer=customer, inbound=True, text=text
+            )
+            # Send a reply
+            reply = "Thanks—got your Instagram DM!"
+            ChatMessage.objects.create(
+                customer=customer, inbound=False, text=reply
+            )
+            send_instagram(sender_id, reply)
+            return HttpResponse(status=200)
+
+        # 2) Handle WhatsApp messages (entry -> changes -> messages)
         for entry in payload.get("entry", []):
             for change in entry.get("changes", []):
                 val = change.get("value", {})
                 for msg in val.get("messages", []):
-                    sender = msg.get("from")
-                    text   = msg.get("text", {}).get("body", "")
+                    sender_id = msg.get("from")
+                    text      = msg.get("text", {}).get("body", "")
+
                     customer, _ = Customer.objects.get_or_create(
-                        platform="whatsapp", user_id=sender
+                        platform="whatsapp", user_id=sender_id
                     )
-                    ChatMessage.objects.create(customer=customer, inbound=True, text=text)
+                    ChatMessage.objects.create(
+                        customer=customer, inbound=True, text=text
+                    )
+
                     reply = "Thanks—got your WhatsApp message!"
-                    ChatMessage.objects.create(customer=customer, inbound=False, text=reply)
-                    send_whatsapp(sender, reply)
+                    ChatMessage.objects.create(
+                        customer=customer, inbound=False, text=reply
+                    )
+                    send_whatsapp(sender_id, reply)
 
-        # Instagram DMs
+        # 3) Handle Instagram production payload (entry -> messaging)
         for entry in payload.get("entry", []):
-            for dm_event in entry.get("messaging", []):
-                msg = dm_event.get("message")
-                if not msg:
+            for event in entry.get("messaging", []):
+                msg = event.get("message")
+                if not msg or "text" not in msg:
                     continue
-                sender = dm_event["sender"]["id"]
-                text   = msg.get("text", "")
-                customer, _ = Customer.objects.get_or_create(
-                    platform="instagram", user_id=sender
-                )
-                ChatMessage.objects.create(customer=customer, inbound=True, text=text)
-                reply = "Thanks—got your Instagram DM!"
-                ChatMessage.objects.create(customer=customer, inbound=False, text=reply)
-                send_instagram(sender, reply)
+                sender_id = event.get("sender", {}).get("id")
+                text      = msg.get("text", "")
 
+                customer, _ = Customer.objects.get_or_create(
+                    platform="instagram", user_id=sender_id
+                )
+                ChatMessage.objects.create(
+                    customer=customer, inbound=True, text=text
+                )
+
+                reply = "Thanks—got your Instagram DM!"
+                ChatMessage.objects.create(
+                    customer=customer, inbound=False, text=reply
+                )
+                send_instagram(sender_id, reply)
+
+        # Acknowledge receipt
         return HttpResponse(status=200)
