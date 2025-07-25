@@ -29,6 +29,12 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "kyomu-bot-demo.loca.lt"]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://kyomu-bot-demo.loca.lt",
+    # or wildcard (Django 4.0+ supports this):
+    "https://*.loca.lt",
+]
+
 
 # Application definition
 
