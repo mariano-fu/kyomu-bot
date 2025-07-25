@@ -79,5 +79,4 @@ def get_quick_replies():
         {"type": "reply", "reply": {"id": "menu", "title": "🍣 View Menu"}},
         {"type": "reply", "reply": {"id": "hours", "title": "⏰ Hours"}},
         {"type": "reply", "reply": {"id": "location", "title": "📍 Location"}},
-        {"type": "reply", "reply": {"id": "order", "title": "🛍️ Make an Order"}},
     ]
